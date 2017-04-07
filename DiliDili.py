@@ -1,6 +1,20 @@
 import requests
 import lxml
 from bs4 import BeautifulSoup
+import mysql.connector
+import re
+import crawlEveryYearComicInfo
+
+DBCONFIG = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': 'password',
+    'port':3306,
+    'database': 'databasefordilidili',
+    'charset': 'utf8'
+}
+conn = mysql.connector.connect(**DBCONFIG)
+cursor = conn.cursor()
 
 def getNeedUrl():
     url = 'http://www.dilidili.wang/'
@@ -31,6 +45,7 @@ def getNeedUrl():
             tempDict['url'] = a['href']
             comicList.append(tempDict)
     return comicList
+
 def getComicInfoFromUrl(comicDict):
     url = comicDict['url']
     headers = {
@@ -47,7 +62,7 @@ def getComicInfoFromUrl(comicDict):
     soup = BeautifulSoup(text.text, 'lxml').find('div', class_='anime_list').find_all('dd')
     for dd in soup:
         comicInfoDict = {'name': None,
-                         'comicurl': 'http://www.dilidili.wang/',
+                         'curl': 'http://www.dilidili.wang',
                          'area': None,
                          'publishtime': None,
                          'label': None,
@@ -58,7 +73,7 @@ def getComicInfoFromUrl(comicDict):
                          'belone': None}
         #print(dd.find('a'),dd.find_all('div', class_='d_label'),dd.find_all('p'))
         comicInfoDict['name'] = dd.find('a').get_text()
-        comicInfoDict['comicurl'] = comicInfoDict['comicurl'] + str(dd.find('a')['href'])
+        comicInfoDict['curl'] = comicInfoDict['curl'] + str(dd.find('a')['href'])
         for b in dd.find_all('div', class_='d_label'):
             if b.get_text().split('：')[0] == '地区':
                 comicInfoDict['area'] = b.get_text().split('：')[1]
@@ -75,19 +90,39 @@ def getComicInfoFromUrl(comicDict):
             if p.get_text().split('：')[0] == '看点':
                 comicInfoDict['focus'] = p.get_text().split('：')[1]
             if p.get_text().split('：')[0] == '简介':
-                comicInfoDict['summary'] = p.get_text().split('：')[1]
+                comicInfoDict['summary'] = p.get_text().split('：')[1][:100]
         comicInfoDict['belone'] = comicDict['title']
         comicInfoList.append(comicInfoDict)
     return comicInfoList
+def savecomicSummaryIntoDatabase(comicInfoDict):
+    print('Saving comic #', comicInfoDict['name'], 'into db')
+    cursor.execute('SET FOREIGN_KEY_CHECKS=0')
+    conn.commit()
+    try:
+        cursor.execute(
+            'replace into comic_information'
+        '(Name, Url, Area, PublishTime, Label, PlayedTime, Focus, Summary, State)'
+        'values(%s, %s, %s, %s, %s, %s, %s, %s, %s)',
+        [comicInfoDict['name'], comicInfoDict['curl'], comicInfoDict['area'],
+         comicInfoDict['publishtime'], comicInfoDict['label'], comicInfoDict['playedtime'],
+         comicInfoDict['focus'], comicInfoDict['summary'], comicInfoDict['state']])
+        conn.commit()
+    except Exception as e:
+        print(e)
+    cursor.execute('SET FOREIGN_KEY_CHECKS=1')  # 重新开启外键检测
+    conn.commit()
 
 def main():
-    urlList = getNeedUrl()
+    urlList = crawlEveryYearComicInfo.getNeedUrl()
     sumComicInfoList = []
     for comicDict in urlList:
         sumComicInfoList.append(getComicInfoFromUrl(comicDict))
     for comicInfoList in sumComicInfoList:
-        for comicinfoDict in comicInfoList:
-            print(comicinfoDict)
+        for comicInfoDict in comicInfoList:
+            print(comicInfoDict)
+            savecomicSummaryIntoDatabase(comicInfoDict)
+    cursor.close()
+    conn.close()
 
 if __name__ == '__main__':
     main()
