@@ -15,17 +15,17 @@ def getNeedUrl():
     except Exception as e:
         print(e)
     comicList = []
-    soup = BeautifulSoup(text.text, 'lxml').find('div', class_='tagbox').find_all('div', class_='nianfan')
-    for year in soup:
-        for mon in year.find_all('a'):
+    soup = BeautifulSoup(text.text, 'lxml').find_all('div', class_='tagbox')
+    for tagbox in soup:
+        #print(tagbox.find('span'))
+        for mon in tagbox.find_all('a'):
+            #print(mon)
             tempDict = {
                 'title': None,
                 'url': None}
-            if mon.get_text()[-1:] == '月':
-                continue
-            else:
-                tempDict['title'] = mon.get_text()[:6]
-                tempDict['url'] = mon['href']
-                comicList.append(tempDict)
+            tempDict['title'] = mon.get_text()[:6]
+            tempDict['url'] = mon['href']
+            comicList.append(tempDict)
+        #print(comicList)
     return  comicList
 
